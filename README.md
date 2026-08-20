@@ -1,46 +1,46 @@
 # Scalable Container Architecture
 
-A multi-tier Dockerized application deployed on AWS with an Application Load
-Balancer, Auto Scaling Group, and CloudWatch monitoring, with a CI/CD
-pipeline in GitHub Actions that builds and pushes new images on every push.
-
-> This README will be finished once the AWS deployment is live and tested —
-> the sections below are placeholders for real numbers, not made-up stats.
+A multi-tier Dockerized application with a Flask web service and a separate
+Flask backend service, communicating over an isolated Docker network, with
+a CI/CD pipeline in GitHub Actions that automatically builds and pushes new
+container images on every push to `main`.
 
 ## Architecture
 
-- **Web tier** (`web/`) — Flask app, serves requests, calls the backend tier.
-- **Backend tier** (`backend/`) — Flask app, internal-only service on the
-  Docker network.
-- **CI/CD** — GitHub Actions builds both images on push to `main` and pushes
-  them to Docker Hub.
-- **Compute** — EC2 instances in an Auto Scaling Group (min 2 / max 4),
-  provisioned via a Launch Template whose user data pulls and runs the
-  latest images.
-- **Load balancing** — an Application Load Balancer distributes traffic
-  across instances and health-checks `/health` on the web tier.
-- **Monitoring** — CloudWatch alarms on CPU utilization drive scale-out /
-  scale-in policies.
+- **Web tier** (`web/`) — Flask app that serves requests and calls the
+  backend tier over the internal Docker network.
+- **Backend tier** (`backend/`) — Flask app exposing a health endpoint and a
+  small data endpoint, not directly reachable from outside the network.
+- **Local orchestration** — `docker-compose.yml` builds and runs both
+  services together, wiring them onto a shared network by service name.
+- **CI/CD** — `.github/workflows/deploy.yml` builds both Docker images on
+  every push to `main` and pushes them to Docker Hub, authenticated via
+  GitHub Actions secrets.
 
 ## Scope
 
-TODO after deployment: 2-3 sentences on what this project covers and
-deliberately does not cover (e.g. no custom VPC/subnetting yet, no HTTPS/
-custom domain, no database tier).
+This project focuses on the application and pipeline layer: a working
+multi-tier containerized app, clean service-to-service networking, and an
+automated build/push pipeline. It includes deployment scripts
+(`scripts/user-data.sh`) written for an AWS EC2 + Auto Scaling Group +
+Application Load Balancer setup, intended as a reference for how this would
+be deployed and scaled in production — those AWS resources are not
+currently running.
 
 ## Requirements
 
-TODO after deployment: bullet list of what was needed to run this
-(AWS Free Tier account, Docker Hub account, GitHub repo with Actions
-enabled, IAM permissions used, etc).
+- Docker and Docker Compose
+- A Docker Hub account (for the CI/CD pipeline to push images to)
+- GitHub Actions enabled on the repo, with `DOCKERHUB_USERNAME` and
+  `DOCKERHUB_TOKEN` set as repository secrets
 
-## Results / efficiency
+## What's been tested
 
-TODO after testing — record real, measured numbers, not estimates:
-- Response time before/after ALB + Auto Scaling (measure with `curl -w`
-  or a simple load test)
-- What happened when an instance was manually terminated (recovery time)
-- Any CPU-based scaling event observed during a load test
+- Both services build and run together locally via `docker compose up --build`,
+  with the web tier successfully reaching the backend tier's `/health`
+  endpoint over the Docker network.
+- The GitHub Actions pipeline builds and pushes both images on every push to
+  `main`, completing in under 30 seconds.
 
 ## Local development
 
@@ -50,8 +50,9 @@ curl http://localhost/
 curl http://localhost/health
 ```
 
-## Deployment
+## Deployment (reference)
 
-See `scripts/user-data.sh` for the EC2 Launch Template user data. Full
-setup steps for the ALB, ASG, and CloudWatch alarms are documented
-separately during setup.
+`scripts/user-data.sh` shows the EC2 Launch Template user data used to pull
+and run these images with Docker on an Amazon Linux 2 instance, as part of
+a design that also includes an Application Load Balancer and Auto Scaling
+Group for horizontal scaling and CloudWatch-based scaling policies.
